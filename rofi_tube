@@ -1,0 +1,323 @@
+#!/usr/bin/env bash
+#
+# #############################################################
+# File...: rofi_tube
+# Created: Thursday, 16/07/2020-12:35:35
+# Author: broken7c4 (github) - [bkn@7c4]
+# ~·~·~·~·~·~·~·~·~·~·~·~·~~·~·~·~·~·~·~·~·~·~·~·~·~~·~·~·~·~·~
+# Last Modified: Thursday, 16/07/2020-18:30:56
+# Modified By: broken7c4 (none) - [fgm@7c4]
+# ~·~·~·~·~·~·~·~·~·~·~·~·~~·~·~·~·~·~·~·~·~·~·~·~·~~·~·~·~·~·~
+# Description: 
+#  >
+# #############################################################
+#
+
+# script name
+APP=$(basename $0)
+
+# script home dir
+APP_HOME=$HOME/.config/$APP
+
+# temporary files at runtime
+APP_TMP=/tmp/$APP
+
+# create dirs if not exits
+mkdir -p $APP_HOME/{watch,playlists} $APP_TMP
+
+
+# #############################################################
+#  required programs config
+# #############################################################
+
+# required binaries 
+requirements=(rofi mpv youtube-dl jq xrandr  grep awk cut rev tr) 
+for program in ${requirements[@]}; do
+    location=$(whereis $program | awk '{print $2}')
+    if [ "$location" == "" ]; then
+        echo "$program not found"
+        notify-send "$APP error!" "'$program' not found."
+        exit 1
+    fi
+done
+
+resolution=`xrandr | grep "Screen 0" | cut -d , -f2 | rev | cut -d ' ' -f1-3 | rev | tr -d ' ' `
+screen_width=$(echo $resolution | cut -d 'x' -f1 )
+
+PLAYER=mpv
+PLAYER_ARGS="--ytdl-raw-options=yes-playlist= \
+--force-window=immediate \
+--ytdl-raw-options=force-ipv4= \
+"
+ROFI_CONFIG="~/.config/rofi/config.rasi"
+# ROFI_CONFIG="~/.config/rofimenu/rofimenu.config"
+# ROFI_CONFIG="/home/fgm/.config/rofi-menus/themes/appsmenu.rasi"
+ROFI_WIDTH=$(($screen_width/4*3))
+ROFI_FONT="source code Pro nerd fonts 16"
+ROFI_PROMPT="YouTube >>"
+
+
+# #############################################################
+#  run time vars
+# #############################################################
+
+# channels 
+channels_list=$APP_HOME/channels.list
+source=$APP_TMP/channels_list
+
+# debug mode - print info to terminal 
+debug=false
+
+# #############################################################
+#  functions
+# #############################################################
+usage(){
+    echo "usage: $APP [-da]"
+    exit
+}
+
+print_debug(){
+    if [ "$debug" == "true" ]; then
+        echo -e "$@"
+    fi
+}
+
+listExists(){
+    ! [ -f $channels_list ] && echo "Social Media@YouTube@https://www.youtube.com/user/YouTube" > $channels_list
+}
+
+get_playlists() {
+    # create channels_list if dont exist
+    listExists
+    # order file
+    cat $channels_list | grep -v "#" | sort > $source
+    # read each line from $source file
+    while read -r LINE; do
+        # format content of line: this "category@channel_name@url" to "category - channel_name"
+        line_formated="$(echo $LINE | awk -F @ '{print $1" - "$2}')"
+        echo "$line_formated"
+    done < "$source"
+}
+
+get_YTVideos(){
+    URL=$1
+    OUTPUT="$(youtube-dl --skip-download \
+     -o '%(uploader)s:%(playlist)s:%(playlist_index)s:%(upload_date)s:%(duration)s:%(id)s:%(title)s' -j $URL \
+    | jq '._filename')"
+    
+    if [ "$OUTPUT" != "" ]; then 
+        echo "# updated=$(date '+%Y%m%d') @$URL"
+        while IFS=':' read channel playlist index date duration id title; do
+            echo "https://youtu.be/$id # $channel:$playlist:$index:$date:$duration:$title"
+        done <<< $OUTPUT
+    else
+        echo "null"
+    fi
+}
+
+get_channel_playlist(){
+    selected_channel=$1
+    
+    channel_link="$(grep -m 1 "$(echo $choice | cut -d '-' -f2 | xargs)" $channels_list | cut -d '@' -f 3)"
+    channel_name="$(grep -m 1 "$(echo $choice | cut -d '-' -f2 | xargs)" $channels_list | cut -d '@' -f 2 | tr -s ' ' '-' | tr '[:upper:]' '[:lower:]')"
+
+    current_playlist=$APP_HOME/playlists/${channel_name}.m3u
+
+    echo $current_playlist
+}
+
+run_playlist(){
+
+    current_playlist=$1
+
+    if [ ! -f $current_playlist ]; then
+        # get all ChannelVideos by channel url
+        notify-send -u critical "$APP" "downloading $channel_name playslist"
+        get_YTVideos $channel_link > $current_playlist
+        if [ "$(cat $current_playlist)" != "null" ]; then
+            notify-send -u critical "$APP" "$channel_name playlist done."
+        else
+            notify-send -u critical "$APP FAIL" "$channel_name playlist not created."
+            rm $current_playlist
+            exit
+        fi
+    else
+        # get last sync date
+        last_sync=$(sed -n 1p $current_playlist | cut -d '@' -f1 | cut -d '=' -f2)
+        
+        # total of videos in this channel
+        videos_count=$(cat $current_playlist | grep -v "# updated=" | wc -l)
+        
+        # reverse playlist
+        current_rev=$APP_TMP/channel_playing_reverse.m3u
+        tac $current_playlist | grep -v "# updated=" > $current_rev
+        
+        useInput=""
+        selectedRow=0
+        while [ "$video" != "exit" ]; do   
+
+            playlist_link=""
+
+            answer="$( echo -e "\
+                $current_playlist # :::::all videos\r\n\
+                $current_rev # :::::all videos (reverse)\r\n\
+                $current_playlist --shuffle # :::::all videos (ramdom)\r" \
+                | cat - $current_playlist \
+                | cut -d '#' -f2-5 \
+                | cut -d ':' -f4,6-10  | \
+                rofi -dmenu -i \
+                    -width $ROFI_WIDTH \
+                    -selected-row "$selectedRow" \
+                    -config $ROFI_CONFIG \
+                    -fuzzy -p "$channel_name uploads ($videos_count) - sync: $last_sync" \
+                    -filter "$userInput" \
+                    -font "$ROFI_FONT" \
+                    -format "f%i%s" \
+                    -multi-select )"
+            
+            # print_debug "\nrofi-output: $answer"
+            userInput=$(echo $answer | cut -d '%' -f1)
+            
+            # check if user selected one video
+            
+            if [ "$(echo -e "$answer" | wc -l)" == "1" ]; then
+                userInput=$(echo $answer | cut -d '%' -f1)
+                selectedRow=$(echo $answer | cut -d '%' -f2)
+                video=$(echo $answer | cut -d '%' -f3-40)
+
+            else
+                # if more than one, we create a tmp list with videos
+                notify-send "$APP" "$(echo "$answer" | wc -l) videos selected"
+                tmp_playlist="$APP_HOME/watch/$channel_name-$(echo $userInput|tr -s ' ' '-')-$(echo -e "$answer" | wc -l).m3u"
+                echo "# $current_playlist" > $tmp_playlist
+                while IFS="%" read -r input id vid; do
+                    echo "$(cat $current_playlist | grep -m1 "$(echo $vid| cut -d ':' -f2)" )" >>$tmp_playlist
+                    userInput=$input
+                    selectedRow=$id
+                    video=$vid
+                done <<< "$answer"
+                playlist_link="$tmp_playlist"
+
+            fi
+            
+            # if user has not picked anything, exit
+            if [[ -z "${video// }" ]]; then
+                # print debug info if is active
+                print_debug "video in playlist: video empty!;"
+                exit 1
+            fi
+
+            video_tile="$(echo $video | cut -d':' -f2-20)"
+
+            if [ "$playlist_link" == "" ]; then
+                # date of selected video
+                filter_date=$(echo $video |  cut -d ':' -f1)
+                # title of selected video
+                filter_title=$(echo $video |  cut -d ':' -f2-10)
+
+                # if in title have '[' or ']' will bug grep filter. so we escape this chars
+                filter_title=${filter_title/'['/\\'['}
+                filter_title=${filter_title/']'/\\']'}
+
+                # get link in playlist filtering by 'date' and 'title'
+                playlist_link="$(echo -e "\
+                    $current_playlist # :::::all videos\r\n\
+                    $current_rev # :::::all videos (reverse)\r\n \
+                    --shuffle  $current_playlist  # :::::all videos (ramdom)\r"  \
+                    | cat - $current_playlist 2> /dev/null | \
+                    grep "$filter_date" | \
+                    grep -m1 "$filter_title" | \
+                    cut -d '#' -f1)"
+            fi
+            play "$(echo $playlist_link | xargs)"
+            # break
+        done
+    fi
+}
+
+get_link(){
+
+    case "$MODE" in
+    "playlist")
+        link=$(get_channel_playlist "$choice") ;;
+    *)
+        link="$(grep -m 1 "$(echo $choice | cut -d '-' -f2 | xargs)" $channels_list | cut -d '@' -f 3)"
+        # If the choice does not exist, try searching for it
+        if [ ${#link} -eq "0" ]; then
+            yid=$(youtube-dl ytsearch:"$choice" -s | grep "\[youtube\]" | cut -d ']' -f 2 | awk -F ':' '{print $1}' | cut -c 2-)
+            link=https://www.youtube.com/watch\?v\="$yid"
+        fi
+        ;;
+    esac
+    # return link to play
+    echo $link
+}
+
+play(){
+    linktoplay=$1
+    # If user has not picked anything, exit
+    if [[ -z "${linktoplay// }" ]]; then
+        # print debug info if is active
+        print_debug "error: link empty!"
+        notify-send "$APP error" "link empty!"
+        exit 1
+    fi
+
+    if [[ "$linktoplay" =~ "--shuffle" ]]; then
+        linktoplay=${linktoplay/--shuffle/}
+        PLAYER_ARGS+=" --shuffle "
+    fi
+    # Send notification
+    notify-send "YouTube - Loading:" "$choice\n$linktoplay"
+
+    # play selected channel/video
+    print_debug "channel: $choice\nlink: $linktoplay\n"
+    print_debug "$PLAYER $PLAYER_ARGS \"$linktoplay\"\n"
+
+    $PLAYER $PLAYER_ARGS $linktoplay
+}
+# #############################################################
+#  check params
+# #############################################################
+while [ "$1" != "" ]; do
+    case $1 in
+        -h | --help) usage ;;
+        -d | --debug) debug=true ;;
+        -r | --random) PLAYER_ARGS+="-shuffle" ;;
+        -p | --playlist) MODE="playlist";;
+        # -a | --add) echo ;;
+        # -p | --play) ;;
+        # *) 
+        #     # mode+=" (new) "
+        #     ;;
+    esac
+    shift
+done
+
+# #############################################################
+#  RUN
+# #############################################################
+choice=$( (get_playlists) | \
+    rofi -dmenu -i \
+         -config $ROFI_CONFIG \
+         -width $ROFI_WIDTH \
+         -font "$ROFI_FONT" \
+         -fuzzy -p "$ROFI_PROMPT" )
+
+if [[ -z "${choice// }" ]]; then
+    # print debug info if is active
+    print_debug "error: no channel selected!"
+    exit 1
+fi
+
+# Get URL
+linktoplay="$(get_link)"
+
+# check if link is a local file in pc (playlist)
+if [[ "$linktoplay" =~ "$APP_HOME" ]]; then
+    run_playlist "$linktoplay"
+else
+    play "$linktoplay"
+fi
+
+
