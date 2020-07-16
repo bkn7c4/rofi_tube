@@ -3,10 +3,10 @@
 # #############################################################
 # File...: rofi_tube
 # Created: Thursday, 16/07/2020-12:35:35
-# Author: broken7c4 (github) - [bkn@7c4]
+# Author: bkn7c4 (github) - [bkn@7c4]
 # ~·~·~·~·~·~·~·~·~·~·~·~·~~·~·~·~·~·~·~·~·~·~·~·~·~~·~·~·~·~·~
-# Last Modified: Thursday, 16/07/2020-18:30:56
-# Modified By: broken7c4 (none) - [fgm@7c4]
+# Last Modified: Thursday, 16/07/2020-19:11:21
+# Modified By: bkn7c4 (none) - [bkn@7c4]
 # ~·~·~·~·~·~·~·~·~·~·~·~·~~·~·~·~·~·~·~·~·~·~·~·~·~~·~·~·~·~·~
 # Description: 
 #  >
@@ -50,8 +50,6 @@ PLAYER_ARGS="--ytdl-raw-options=yes-playlist= \
 --ytdl-raw-options=force-ipv4= \
 "
 ROFI_CONFIG="~/.config/rofi/config.rasi"
-# ROFI_CONFIG="~/.config/rofimenu/rofimenu.config"
-# ROFI_CONFIG="/home/fgm/.config/rofi-menus/themes/appsmenu.rasi"
 ROFI_WIDTH=$(($screen_width/4*3))
 ROFI_FONT="source code Pro nerd fonts 16"
 ROFI_PROMPT="YouTube >>"
@@ -175,7 +173,6 @@ run_playlist(){
                     -format "f%i%s" \
                     -multi-select )"
             
-            # print_debug "\nrofi-output: $answer"
             userInput=$(echo $answer | cut -d '%' -f1)
             
             # check if user selected one video
@@ -285,11 +282,6 @@ while [ "$1" != "" ]; do
         -d | --debug) debug=true ;;
         -r | --random) PLAYER_ARGS+="-shuffle" ;;
         -p | --playlist) MODE="playlist";;
-        # -a | --add) echo ;;
-        # -p | --play) ;;
-        # *) 
-        #     # mode+=" (new) "
-        #     ;;
     esac
     shift
 done
