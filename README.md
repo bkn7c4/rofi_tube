@@ -2,10 +2,10 @@
 
 <p align="center">
   <!-- <img src="https://img.shields.io/badge/Maintained%3F-Yes-blueviolet?style=flat-square"> -->
-  <img src="https://img.shields.io/github/license/broken7c4/rofi_tube?style=flat-square">
-  <img src="https://img.shields.io/github/stars/broken7c4/rofi_tube?color=red&style=flat-square">
-  <img src="https://img.shields.io/github/forks/broken7c4/rofi_tube?style=flat-square">
-  <img src="https://img.shields.io/github/issues/broken7c4/rofi_tube?style=flat-square">
+  <img src="https://img.shields.io/github/license/bkn7c4/rofi_tube?style=flat-square">
+  <img src="https://img.shields.io/github/stars/bkn7c4/rofi_tube?color=red&style=flat-square">
+  <img src="https://img.shields.io/github/forks/bkn7c4/rofi_tube?style=flat-square">
+  <img src="https://img.shields.io/github/issues/bkn7c4/rofi_tube?style=flat-square">
 </p>
 
 This project is bash script to play videos from YouTube using rofi and mpv.
